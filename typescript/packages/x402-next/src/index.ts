@@ -176,34 +176,67 @@ export function paymentMiddleware(
     }
     // svm networks
     else if (SupportedSVMNetworks.includes(network)) {
-      // network call to get the supported payments from the facilitator
-      const paymentKinds = await supported();
+      // For SVM gasless payments, we need to call /x402/quote to get:
+      // - paymentAmount: how much user needs to approve/send on Solana
+      // - facilitatorAddress: delegate (SPL) or destination (native SOL)
+      // - feePayerAddress: backend that pays transaction fees
 
-      // find the payment kind that matches the network and scheme
-      let feePayer: string | undefined;
-      for (const kind of paymentKinds.kinds) {
-        if (kind.network === network && kind.scheme === "exact") {
-          feePayer = kind?.extra?.feePayer;
-          break;
-        }
+      const facilitatorUrl = facilitator?.url || "https://x402.org/facilitator";
+
+      // Get source network and token from route config or use defaults
+      // For cross-chain: user pays on Solana, resource server receives on EVM
+      const srcNetwork = config?.srcNetwork || network; // Default to same network
+      const srcTokenAddress = config?.srcTokenAddress || asset.address;
+
+      // Call /x402/quote for cross-chain conversion
+      const quoteResponse = await fetch(`${facilitatorUrl}/x402/quote`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          srcTokenAddress, // Token user pays with (on Solana)
+          srcNetwork, // Network user pays on (solana)
+          dstTokenAddress: asset.address, // Token resource server receives (on EVM)
+          dstNetwork: network, // Network resource server receives on (base, etc.)
+          dstAmount: maxAmountRequired.toString(), // Amount resource server receives
+        }),
+      });
+
+      if (!quoteResponse.ok) {
+        throw new Error(`Failed to get SVM quote: ${quoteResponse.statusText}`);
       }
 
-      // svm networks require a fee payer
-      if (!feePayer) {
-        throw new Error(`The facilitator did not provide a fee payer for network: ${network}.`);
+      const quote = (await quoteResponse.json()) as {
+        success?: boolean;
+        data?: {
+          paymentAmount: string;
+          facilitatorAddress: string;
+          feePayerAddress: string;
+        };
+        error?: string;
+      };
+
+      if (!quote.success || !quote.data) {
+        throw new Error(`Failed to get SVM quote: ${quote.error || "Unknown error"}`);
       }
 
-      // build the payment requirements for svm
+      const { paymentAmount, facilitatorAddress, feePayerAddress } = quote.data;
+
+      // build the payment requirements for svm with gasless info
+      // network = destination network (where resource server receives)
+      // srcNetwork = source network (where user pays from)
       paymentRequirements.push({
         scheme: "exact",
-        network,
-        maxAmountRequired,
+        network, // Destination network (base, ethereum, etc.)
+        maxAmountRequired: maxAmountRequired, // Amount resource server receives
         resource: resourceUrl,
         description: description ?? "",
         mimeType: mimeType ?? "",
         payTo: payTo,
         maxTimeoutSeconds: maxTimeoutSeconds ?? 60,
-        asset: asset.address,
+        asset: asset.address, // Destination token address
+        srcTokenAddress, // Source token address (on Solana)
+        srcNetwork, // Source network (solana)
+        srcAmountRequired: paymentAmount, // Amount user needs to pay (from quote)
         // TODO: Rename outputSchema to requestStructure
         outputSchema: {
           input: {
@@ -215,7 +248,8 @@ export function paymentMiddleware(
           output: outputSchema,
         },
         extra: {
-          feePayer,
+          feePayer: feePayerAddress,
+          facilitatorAddress, // For gasless: delegate (SPL) or destination (native SOL)
         },
       });
     } else {

@@ -27,6 +27,9 @@ export type PaymentMiddlewareConfig = {
   customPaywallHtml?: string;
   resource?: Resource;
   signatureType?: "authorization" | "permit";
+  // For cross-chain payments: specify source network and token
+  srcNetwork?: Network;
+  srcTokenAddress?: string;
   errorMessages?: {
     paymentRequired?: string;
     invalidPayment?: string;

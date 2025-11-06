@@ -41,7 +41,11 @@ export function PaywallApp() {
     );
   }
 
-  if (isEvmNetwork(paymentRequirement.network)) {
+  // For cross-chain: check srcNetwork (where user pays from)
+  // For same-chain: srcNetwork is undefined, so check network
+  const sourceNetwork = paymentRequirement.srcNetwork || paymentRequirement.network;
+
+  if (isEvmNetwork(sourceNetwork)) {
     return (
       <EvmPaywall
         paymentRequirement={paymentRequirement}
@@ -50,7 +54,7 @@ export function PaywallApp() {
     );
   }
 
-  if (isSvmNetwork(paymentRequirement.network)) {
+  if (isSvmNetwork(sourceNetwork)) {
     return (
       <SolanaPaywall
         paymentRequirement={paymentRequirement}

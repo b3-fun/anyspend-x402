@@ -52,7 +52,9 @@ export function SolanaPaywall({ paymentRequirement, onSuccessfulResponse }: Sola
       ? x402.amount
       : Number(paymentRequirement.maxAmountRequired ?? 0) / 1_000_000;
 
-  const network = paymentRequirement.network;
+  // For cross-chain: use srcNetwork (where user pays from)
+  // For same-chain: srcNetwork is undefined, so use network
+  const network = paymentRequirement.srcNetwork || paymentRequirement.network;
   const chainName = getNetworkDisplayName(network);
   const targetChain =
     network === "solana" ? ("solana:mainnet" as const) : ("solana:devnet" as const);

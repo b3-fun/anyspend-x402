@@ -147,18 +147,56 @@ export const ExactEvmPermitPayloadSchema = z.object({
 });
 export type ExactEvmPermitPayload = z.infer<typeof ExactEvmPermitPayloadSchema>;
 
-// x402ExactSvmPayload
+// x402ExactSvmPayload (Local Facilitator Only)
+// This payload type is used by local facilitators that verify/settle transactions themselves.
+// Remote facilitators (Anyspend) use ExactSolanaApprovalPayload or ExactSolanaNativePayload.
 export const ExactSvmPayloadSchema = z.object({
   transaction: z.string().regex(Base64EncodedRegex),
 });
 export type ExactSvmPayload = z.infer<typeof ExactSvmPayloadSchema>;
+
+// x402ExactSolanaApprovalPayload (Gasless SPL Token Approval)
+export const ExactSolanaApprovalPayloadSchema = z.object({
+  signature: z.string(),
+  approval: z.object({
+    owner: z.string().regex(SvmAddressRegex),
+    delegate: z.string().regex(SvmAddressRegex),
+    tokenAccount: z.string().regex(SvmAddressRegex),
+    tokenMint: z.string().regex(SvmAddressRegex),
+    value: z.string().refine(isInteger),
+    serializedTransaction: z.string().regex(Base64EncodedRegex),
+    blockhash: z.string(),
+    lastValidBlockHeight: z.number(),
+  }),
+});
+export type ExactSolanaApprovalPayload = z.infer<typeof ExactSolanaApprovalPayloadSchema>;
+
+// x402ExactSolanaNativePayload (Gasless Native SOL Transfer)
+export const ExactSolanaNativePayloadSchema = z.object({
+  signature: z.string(),
+  transfer: z.object({
+    owner: z.string().regex(SvmAddressRegex),
+    destination: z.string().regex(SvmAddressRegex),
+    value: z.string().refine(isInteger),
+    serializedTransaction: z.string().regex(Base64EncodedRegex),
+    blockhash: z.string(),
+    lastValidBlockHeight: z.number(),
+  }),
+});
+export type ExactSolanaNativePayload = z.infer<typeof ExactSolanaNativePayloadSchema>;
 
 // x402PaymentPayload
 export const PaymentPayloadSchema = z.object({
   x402Version: z.number().refine(val => x402Versions.includes(val as 1)),
   scheme: z.enum(schemes),
   network: NetworkSchema,
-  payload: z.union([ExactEvmPayloadSchema, ExactEvmPermitPayloadSchema, ExactSvmPayloadSchema]),
+  payload: z.union([
+    ExactEvmPayloadSchema,
+    ExactEvmPermitPayloadSchema,
+    ExactSvmPayloadSchema,
+    ExactSolanaApprovalPayloadSchema,
+    ExactSolanaNativePayloadSchema,
+  ]),
 });
 export type PaymentPayload = z.infer<typeof PaymentPayloadSchema>;
 export type UnsignedPaymentPayload = Omit<PaymentPayload, "payload"> & {
@@ -239,6 +277,30 @@ export const VerifyRequestSchema = z.object({
   paymentRequirements: PaymentRequirementsSchema,
 });
 export type VerifyRequest = z.infer<typeof VerifyRequestSchema>;
+
+// x402QuoteRequest (for gasless transactions)
+export const QuoteRequestSchema = z.object({
+  srcTokenAddress: z.string(),
+  srcNetwork: NetworkSchema,
+  dstTokenAddress: z.string(),
+  dstNetwork: NetworkSchema,
+  dstAmount: z.string().refine(isInteger),
+});
+export type QuoteRequest = z.infer<typeof QuoteRequestSchema>;
+
+// x402QuoteResponse (for gasless transactions)
+export const QuoteResponseSchema = z.object({
+  success: z.boolean(),
+  data: z
+    .object({
+      paymentAmount: z.string(),
+      facilitatorAddress: z.string(),
+      feePayerAddress: z.string(),
+    })
+    .optional(),
+  error: z.string().optional(),
+});
+export type QuoteResponse = z.infer<typeof QuoteResponseSchema>;
 
 // x402VerifyResponse
 export const VerifyResponseSchema = z.object({

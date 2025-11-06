@@ -30,8 +30,22 @@ export async function createPaymentHeader(
 ): Promise<string> {
   // exact scheme
   if (paymentRequirements.scheme === "exact") {
+    // For cross-chain: check srcNetwork (where user pays from)
+    // For same-chain: srcNetwork will be undefined, so check network
+    const sourceNetwork = paymentRequirements.srcNetwork || paymentRequirements.network;
+
+    // svm - check source network first (for cross-chain support)
+    if (SupportedSVMNetworks.includes(sourceNetwork)) {
+      const svmClient = isMultiNetworkSigner(client) ? client.svm : client;
+      if (!isSvmSignerWallet(svmClient)) {
+        throw new Error("Invalid svm wallet client provided");
+      }
+
+      return await createPaymentHeaderExactSVM(svmClient, x402Version, paymentRequirements, config);
+    }
+
     // evm
-    if (SupportedEVMNetworks.includes(paymentRequirements.network)) {
+    if (SupportedEVMNetworks.includes(sourceNetwork)) {
       const evmClient = isMultiNetworkSigner(client) ? client.evm : client;
 
       if (!isEvmSignerWallet(evmClient)) {
@@ -50,15 +64,7 @@ export async function createPaymentHeader(
         return await createPaymentHeaderExactEVM(evmClient, x402Version, paymentRequirements);
       }
     }
-    // svm
-    if (SupportedSVMNetworks.includes(paymentRequirements.network)) {
-      const svmClient = isMultiNetworkSigner(client) ? client.svm : client;
-      if (!isSvmSignerWallet(svmClient)) {
-        throw new Error("Invalid svm wallet client provided");
-      }
 
-      return await createPaymentHeaderExactSVM(svmClient, x402Version, paymentRequirements, config);
-    }
     throw new Error("Unsupported network");
   }
   throw new Error("Unsupported scheme");

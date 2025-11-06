@@ -12,7 +12,11 @@ import { getNetworkId } from "../shared/network";
  * @param scheme - The scheme to check against. If not provided, the scheme will not be checked.
  * @returns The payment requirement that is the most appropriate for the user.
  */
-export function selectPaymentRequirements(paymentRequirements: PaymentRequirements[], network?: Network | Network[], scheme?: "exact"): PaymentRequirements {
+export function selectPaymentRequirements(
+  paymentRequirements: PaymentRequirements[],
+  network?: Network | Network[],
+  scheme?: "exact",
+): PaymentRequirements {
   // Sort `base` payment requirements to the front of the list. This is to ensure that base is preferred if available.
   paymentRequirements.sort((a, b) => {
     if (a.network === "base" && b.network !== "base") {
@@ -28,16 +32,28 @@ export function selectPaymentRequirements(paymentRequirements: PaymentRequiremen
   const broadlyAcceptedPaymentRequirements = paymentRequirements.filter(requirement => {
     // If the scheme is not provided, we accept any scheme.
     const isExpectedScheme = !scheme || requirement.scheme === scheme;
+
+    // For cross-chain: check srcNetwork (where user pays from)
+    // For same-chain: srcNetwork is undefined, so check network
+    const sourceNetwork = requirement.srcNetwork || requirement.network;
+
     // If the chain is not provided, we accept any chain.
-    const isExpectedChain = !network || (Array.isArray(network) ? network.includes(requirement.network) : network == requirement.network);
+    const isExpectedChain =
+      !network ||
+      (Array.isArray(network) ? network.includes(sourceNetwork) : network == sourceNetwork);
 
     return isExpectedScheme && isExpectedChain;
   });
 
   // Filter down to USDC requirements
   const usdcRequirements = broadlyAcceptedPaymentRequirements.filter(requirement => {
+    // For cross-chain: check srcTokenAddress (what user pays with)
+    // For same-chain: srcTokenAddress is undefined, so check asset
+    const sourceNetwork = requirement.srcNetwork || requirement.network;
+    const sourceToken = requirement.srcTokenAddress || requirement.asset;
+
     // If the address is a USDC address, we return it.
-    return requirement.asset === getUsdcChainConfigForChain(getNetworkId(requirement.network))?.usdcAddress;
+    return sourceToken === getUsdcChainConfigForChain(getNetworkId(sourceNetwork))?.usdcAddress;
   });
 
   // Prioritize USDC requirements if available
@@ -60,5 +76,8 @@ export function selectPaymentRequirements(paymentRequirements: PaymentRequiremen
  * @param scheme - The scheme to check against. If not provided, the scheme will not be checked.
  * @returns The payment requirement that is the most appropriate for the user.
  */
-export type PaymentRequirementsSelector = (paymentRequirements: PaymentRequirements[], network?: Network | Network[], scheme?: "exact") => PaymentRequirements;
-
+export type PaymentRequirementsSelector = (
+  paymentRequirements: PaymentRequirements[],
+  network?: Network | Network[],
+  scheme?: "exact",
+) => PaymentRequirements;

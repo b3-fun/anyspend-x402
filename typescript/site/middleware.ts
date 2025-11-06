@@ -20,6 +20,10 @@ const BLOCKED_REGIONS = {
   UA: ["43", "14", "09"],
 };
 
+// For cross-chain payments: user pays on Solana, resource server receives on EVM
+const srcNetwork = process.env.SRC_NETWORK as Network;
+const srcTokenAddress = process.env.SRC_TOKEN_ADDRESS;
+
 const x402PaymentMiddleware = paymentMiddleware(
   address,
   {
@@ -27,8 +31,11 @@ const x402PaymentMiddleware = paymentMiddleware(
       price: "$0.01",
       config: {
         description: "Access to protected content",
+        // Cross-chain: user pays from Solana
+        srcNetwork,
+        srcTokenAddress,
       },
-      network,
+      network, // Destination network where resource server receives
     },
   },
   {
@@ -38,7 +45,7 @@ const x402PaymentMiddleware = paymentMiddleware(
     cdpClientKey,
     appLogo: "/logos/x402-examples.png",
     appName: "x402 Demo",
-    sessionTokenEndpoint: "/api/x402/session-token",
+    // sessionTokenEndpoint: "/api/x402/session-token", // Requires CDP_API_KEY_ID and CDP_API_KEY_SECRET
   },
 );
 

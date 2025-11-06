@@ -52,7 +52,9 @@ export function EvmPaywall({ paymentRequirement, onSuccessfulResponse }: EvmPayw
       ? x402.amount
       : Number(paymentRequirement.maxAmountRequired ?? 0) / 1_000_000;
 
-  const network = paymentRequirement.network as Network;
+  // For cross-chain: use srcNetwork (where user pays from)
+  // For same-chain: srcNetwork is undefined, so use network
+  const network = (paymentRequirement.srcNetwork || paymentRequirement.network) as Network;
   const paymentChain = network === "base-sepolia" ? baseSepolia : base;
   const chainId = paymentChain.id;
   const chainName = getNetworkDisplayName(network);

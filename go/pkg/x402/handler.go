@@ -195,6 +195,20 @@ func (h *Handler) ProcessPayment(
 	preferredToken string,
 	preferredNetwork string,
 ) (*PaymentResult, error) {
+	return h.ProcessPaymentWithConfig(ctx, paymentHeader, requirements, preferredToken, preferredNetwork, nil)
+}
+
+// ProcessPaymentWithConfig verifies and settles a payment, optionally registering with discovery.
+// If config is provided and config.Discoverable is true, the resource will be registered
+// with the Bazaar discovery catalog after successful settlement.
+func (h *Handler) ProcessPaymentWithConfig(
+	ctx context.Context,
+	paymentHeader string,
+	requirements *types.PaymentRequirements,
+	preferredToken string,
+	preferredNetwork string,
+	config *Config,
+) (*PaymentResult, error) {
 	// Decode payment payload
 	payload, err := types.DecodePaymentPayloadFromBase64(paymentHeader)
 	if err != nil {
@@ -226,6 +240,14 @@ func (h *Handler) ProcessPayment(
 	}
 	if settleResp.Payer != nil {
 		result.Payer = *settleResp.Payer
+	}
+
+	// Register with discovery after successful payment if discoverable
+	if config != nil && config.Discoverable && requirements.Resource != "" {
+		if err := h.RegisterWithDiscovery(ctx, config, requirements.Resource); err != nil {
+			// Log but don't fail - payment already succeeded
+			fmt.Printf("x402: warning: failed to register with discovery: %v\n", err)
+		}
 	}
 
 	return result, nil

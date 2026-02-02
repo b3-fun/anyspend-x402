@@ -95,7 +95,7 @@ export function preparePermitPaymentHeader(
   ).toString();
 
   // For permit, the spender needs to be specified in payment requirements extra field
-  // This is the facilitator address that will execute the transfer
+  // This is the facilitator address that will execute the transferFrom call
   const spender = (paymentRequirements.extra?.facilitatorAddress ||
     paymentRequirements.payTo) as Address;
 
@@ -161,11 +161,16 @@ export async function signPermitPaymentHeader<transport extends Transport, chain
 
   const { signature } = await signPermit(client, permitPayload.permit);
 
+  // For swaps: include recipient from payment requirements extra field
+  // This is the intermediate address (global wallet) where funds should be transferred
+  const recipient = paymentRequirements.extra?.recipient as string | undefined;
+
   return {
     ...unsignedPaymentHeader,
     payload: {
       ...permitPayload,
       signature,
+      ...(recipient && { recipient }),
     },
   };
 }

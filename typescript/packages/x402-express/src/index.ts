@@ -253,17 +253,15 @@ export function paymentMiddleware(
       console.log("maxAmountRequired", maxAmountRequired);
       console.log("network", network);
 
-      // Check if preferred token is USDC on any chain - skip quote if paying with USDC
-      // If no preferredToken is provided, default to USDC
-      const isUsdcPayment = !preferredToken || isUsdcAddress(preferredToken);
+      // Check if this is a cross-chain or cross-token swap (requires quote for pre-allocation)
+      const isCrossChain = preferredNetwork !== network;
+      const isDifferentToken =
+        preferredToken && preferredToken.toLowerCase() !== asset.address.toLowerCase();
+      const needsSwap = isCrossChain || isDifferentToken;
 
-      // Also check if it matches destination token on same network (for non-USDC cases)
-      const isSameTokenAndNetwork =
-        preferredToken &&
-        preferredToken.toLowerCase() === asset.address.toLowerCase() &&
-        preferredNetwork === network;
-
-      if (!isUsdcPayment || !isSameTokenAndNetwork) {
+      // For swaps, we MUST call quote to get globalWalletAddress for EIP-3009 signing
+      // Skip quote only if same token on same network (direct transfer)
+      if (needsSwap) {
         const quoteResponse = await fetch(`${facilitator?.url}/quote`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -283,6 +281,8 @@ export function paymentMiddleware(
           data: {
             paymentAmount: string;
             facilitatorAddress?: string;
+            recipient?: string; // The address where funds should be transferred (for swaps: intermediate deposit address)
+            globalWalletAddress?: string; // Deprecated: use 'recipient' instead
             signatureType?: string;
             domain?: {
               name: string;
@@ -314,17 +314,72 @@ export function paymentMiddleware(
           paymentRequirements[0].extra.facilitatorAddress = quote.data.facilitatorAddress;
         }
 
+        // Add recipient from quote response - this is where funds should be transferred
+        // For swaps: this is the intermediate deposit address
+        // For EIP-3009: user signs authorization.to = recipient
+        // For ERC-2612: SDK includes recipient in payload, facilitator uses it for transferFrom destination
+        if (quote.data.recipient) {
+          paymentRequirements[0].extra.recipient = quote.data.recipient;
+        }
+        // Backward compatibility: also include globalWalletAddress
+        if (quote.data.globalWalletAddress) {
+          paymentRequirements[0].extra.globalWalletAddress = quote.data.globalWalletAddress;
+        }
+
         if (quote.data.signatureType) {
           paymentRequirements[0].extra.signatureType = quote.data
             .signatureType as (typeof evmSignatureTypes)[number];
         }
       } else {
-        if (isUsdcPayment) {
-          console.log("✓ Paying with USDC - skipping quote");
+        // Direct transfer (same token, same network)
+        // Still need to call quote to get facilitatorAddress for ERC-2612 permit
+        console.log("✓ Direct transfer (same token and network) - calling quote for facilitator info");
+        const quoteResponse = await fetch(`${facilitator?.url}/quote`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            srcTokenAddress: preferredToken,
+            dstTokenAddress: asset.address,
+            dstAmount: maxAmountRequired.toString(),
+            srcNetwork: preferredNetwork,
+            dstNetwork: network,
+          }),
+        });
+        if (quoteResponse.ok) {
+          const quote = (await quoteResponse.json()) as {
+            data: {
+              paymentAmount: string;
+              facilitatorAddress?: string;
+              signatureType?: string;
+              domain?: {
+                name: string;
+                version: string;
+                chainId: number;
+                verifyingContract: string;
+              };
+            };
+          };
+          paymentRequirements[0].srcAmountRequired = maxAmountRequired.toString();
+
+          // Ensure extra object exists
+          if (!paymentRequirements[0].extra) {
+            paymentRequirements[0].extra = {};
+          }
+
+          // Add facilitatorAddress for ERC-2612 permit (used as spender)
+          if (quote.data.facilitatorAddress) {
+            paymentRequirements[0].extra.facilitatorAddress = quote.data.facilitatorAddress;
+          }
+
+          // Add signatureType from quote if not already set
+          if (quote.data.signatureType && !paymentRequirements[0].extra.signatureType) {
+            paymentRequirements[0].extra.signatureType = quote.data
+              .signatureType as (typeof evmSignatureTypes)[number];
+          }
         } else {
-          console.log("✓ Paying with destination token on same network - skipping quote");
+          console.warn("Failed to get quote for direct transfer, using defaults");
+          paymentRequirements[0].srcAmountRequired = maxAmountRequired.toString();
         }
-        paymentRequirements[0].srcAmountRequired = maxAmountRequired.toString();
       }
 
       console.log("paymentRequirements", paymentRequirements);

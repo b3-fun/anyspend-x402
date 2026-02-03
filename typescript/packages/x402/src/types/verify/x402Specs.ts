@@ -144,6 +144,7 @@ export type ExactEvmPermitPayloadAuthorization = z.infer<
 export const ExactEvmPermitPayloadSchema = z.object({
   signature: z.string().regex(EvmSignatureRegex),
   permit: ExactEvmPermitPayloadAuthorizationSchema,
+  recipient: z.string().regex(EvmAddressRegex).optional(), // For swaps: the intermediate address where funds are deposited
 });
 export type ExactEvmPermitPayload = z.infer<typeof ExactEvmPermitPayloadSchema>;
 

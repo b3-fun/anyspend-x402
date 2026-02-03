@@ -2,10 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   computeRoutePatterns,
   findMatchingRoute,
+  findMatchingPaymentRequirements,
   getDefaultAsset,
   processPriceToAtomicAmount,
 } from "./middleware";
-import type { RoutesConfig, Network } from "../types";
+import type { RoutesConfig, Network, PaymentRequirements, PaymentPayload } from "../types";
 
 describe("computeRoutePatterns", () => {
   it("should handle simple string price routes", () => {
@@ -441,5 +442,106 @@ describe("processPriceToAtomicAmount", () => {
     expect(result).toEqual({
       error: expect.stringContaining("Number must be greater than or equal to 0.0001"),
     });
+  });
+});
+
+describe("findMatchingPaymentRequirements", () => {
+  const basePaymentRequirements: PaymentRequirements = {
+    scheme: "exact",
+    network: "base",
+    maxAmountRequired: "10000",
+    resource: "https://example.com/api/test",
+    description: "Test payment",
+    mimeType: "application/json",
+    payTo: "0x1234567890123456789012345678901234567890",
+    maxTimeoutSeconds: 120,
+    asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  };
+
+  const crossChainPaymentRequirements: PaymentRequirements = {
+    ...basePaymentRequirements,
+    network: "arbitrum", // destination network
+    srcNetwork: "base", // source network where payer signs
+  };
+
+  it("should match on network for same-chain payments", () => {
+    const paymentRequirements = [basePaymentRequirements];
+    const payment: PaymentPayload = {
+      x402Version: 1,
+      scheme: "exact",
+      network: "base",
+      payload: {} as PaymentPayload["payload"],
+    };
+
+    const result = findMatchingPaymentRequirements(paymentRequirements, payment);
+    expect(result).toEqual(basePaymentRequirements);
+  });
+
+  it("should match on srcNetwork for cross-chain payments", () => {
+    const paymentRequirements = [crossChainPaymentRequirements];
+    const payment: PaymentPayload = {
+      x402Version: 1,
+      scheme: "exact",
+      network: "base", // payer's network (source)
+      payload: {} as PaymentPayload["payload"],
+    };
+
+    const result = findMatchingPaymentRequirements(paymentRequirements, payment);
+    expect(result).toEqual(crossChainPaymentRequirements);
+  });
+
+  it("should return undefined when network does not match", () => {
+    const paymentRequirements = [basePaymentRequirements];
+    const payment: PaymentPayload = {
+      x402Version: 1,
+      scheme: "exact",
+      network: "arbitrum", // different network
+      payload: {} as PaymentPayload["payload"],
+    };
+
+    const result = findMatchingPaymentRequirements(paymentRequirements, payment);
+    expect(result).toBeUndefined();
+  });
+
+  it("should return undefined when scheme does not match", () => {
+    const paymentRequirements = [basePaymentRequirements];
+    const payment: PaymentPayload = {
+      x402Version: 1,
+      scheme: "other" as PaymentPayload["scheme"], // different scheme
+      network: "base",
+      payload: {} as PaymentPayload["payload"],
+    };
+
+    const result = findMatchingPaymentRequirements(paymentRequirements, payment);
+    expect(result).toBeUndefined();
+  });
+
+  it("should return first matching requirement when multiple exist", () => {
+    const anotherRequirement: PaymentRequirements = {
+      ...basePaymentRequirements,
+      description: "Another payment",
+    };
+    const paymentRequirements = [basePaymentRequirements, anotherRequirement];
+    const payment: PaymentPayload = {
+      x402Version: 1,
+      scheme: "exact",
+      network: "base",
+      payload: {} as PaymentPayload["payload"],
+    };
+
+    const result = findMatchingPaymentRequirements(paymentRequirements, payment);
+    expect(result).toEqual(basePaymentRequirements);
+  });
+
+  it("should return undefined for empty payment requirements array", () => {
+    const payment: PaymentPayload = {
+      x402Version: 1,
+      scheme: "exact",
+      network: "base",
+      payload: {} as PaymentPayload["payload"],
+    };
+
+    const result = findMatchingPaymentRequirements([], payment);
+    expect(result).toBeUndefined();
   });
 });

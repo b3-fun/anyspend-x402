@@ -31,6 +31,27 @@ export function preparePaymentHeader(
     Math.floor(Date.now() / 1000 + paymentRequirements.maxTimeoutSeconds),
   ).toString();
 
+  // For cross-chain/swap payments, send to the appropriate wallet:
+  // - recipient (preferred): Pre-allocated wallet from quote for swaps
+  // - globalWalletAddress (deprecated): Backward compatible alias for recipient
+  // - facilitatorAddress (fallback): Static facilitator EOA for legacy flow
+  // For direct payments (same chain, same token), send directly to payTo
+  const isCrossChainOrSwap =
+    paymentRequirements.srcNetwork !== paymentRequirements.network ||
+    (paymentRequirements.srcTokenAddress &&
+      paymentRequirements.srcTokenAddress.toLowerCase() !== paymentRequirements.asset?.toLowerCase());
+
+  // Prefer recipient for cross-chain swaps (allows authorization.to to be set correctly)
+  // Fall back to globalWalletAddress (deprecated) or facilitatorAddress for backward compatibility
+  const toAddress =
+    isCrossChainOrSwap && paymentRequirements.extra?.recipient
+      ? (paymentRequirements.extra.recipient as Address)
+      : isCrossChainOrSwap && paymentRequirements.extra?.globalWalletAddress
+        ? (paymentRequirements.extra.globalWalletAddress as Address)
+        : isCrossChainOrSwap && paymentRequirements.extra?.facilitatorAddress
+          ? (paymentRequirements.extra.facilitatorAddress as Address)
+          : (paymentRequirements.payTo as Address);
+
   return {
     x402Version,
     scheme: paymentRequirements.scheme,
@@ -39,7 +60,7 @@ export function preparePaymentHeader(
       signature: undefined,
       authorization: {
         from,
-        to: paymentRequirements.payTo as Address,
+        to: toAddress,
         value: paymentRequirements.srcAmountRequired || paymentRequirements.maxAmountRequired,
         validAfter: validAfter.toString(),
         validBefore: validBefore.toString(),

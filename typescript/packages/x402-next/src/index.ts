@@ -282,6 +282,7 @@ export function paymentMiddleware(
             dstAmount: maxAmountRequired.toString(),
             srcNetwork: preferredNetwork,
             dstNetwork: network,
+            recipientAddress: payTo, // The address that should receive the final payment
           }),
         });
         if (!quoteResponse.ok) {

@@ -56,7 +56,7 @@
   },
   "dependencies": {
     "@solana/kit": "^2.1.1",
-    "@b3dotfun/anyspend-x402": "^0.2.7",
+    "@b3dotfun/anyspend-x402": "^0.2.9",
     "@b3dotfun/anyspend-x402-token-compat": "^0.1.3",
     "express": "^4.18.2",
     "viem": "^2.21.26"

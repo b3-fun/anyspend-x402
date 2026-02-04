@@ -292,6 +292,8 @@ export function paymentMiddleware(
           data: {
             paymentAmount: string;
             facilitatorAddress?: string;
+            recipient?: string; // The address where funds should be transferred (for swaps: intermediate deposit address)
+            globalWalletAddress?: string; // Deprecated: use 'recipient' instead
             signatureType?: string;
             domain?: {
               name: string;
@@ -319,6 +321,18 @@ export function paymentMiddleware(
         // Add facilitatorAddress from quote response to extra field if provided
         if (quote.data.facilitatorAddress) {
           paymentRequirements[0].extra.facilitatorAddress = quote.data.facilitatorAddress;
+        }
+
+        // Add recipient from quote response - this is where funds should be transferred
+        // For swaps: this is the intermediate deposit address
+        // For EIP-3009: user signs authorization.to = recipient
+        // For ERC-2612: SDK includes recipient in payload, facilitator uses it for transferFrom destination
+        if (quote.data.recipient) {
+          paymentRequirements[0].extra.recipient = quote.data.recipient;
+        }
+        // Backward compatibility: also include globalWalletAddress
+        if (quote.data.globalWalletAddress) {
+          paymentRequirements[0].extra.globalWalletAddress = quote.data.globalWalletAddress;
         }
 
         if (quote.data.signatureType) {

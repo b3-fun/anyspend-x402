@@ -39,7 +39,8 @@ export function preparePaymentHeader(
   const isCrossChainOrSwap =
     paymentRequirements.srcNetwork !== paymentRequirements.network ||
     (paymentRequirements.srcTokenAddress &&
-      paymentRequirements.srcTokenAddress.toLowerCase() !== paymentRequirements.asset?.toLowerCase());
+      paymentRequirements.srcTokenAddress.toLowerCase() !==
+        paymentRequirements.asset?.toLowerCase());
 
   // Prefer recipient for cross-chain swaps (allows authorization.to to be set correctly)
   // Fall back to globalWalletAddress (deprecated) or facilitatorAddress for backward compatibility

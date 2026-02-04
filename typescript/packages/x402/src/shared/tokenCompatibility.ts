@@ -24,6 +24,9 @@ let tokenCompatClient: TokenCompatClient | null = null;
 
 /**
  * Get environment variable safely (works in Node.js and edge runtimes)
+ *
+ * @param key - The environment variable key to retrieve
+ * @returns The environment variable value or undefined if not found
  */
 function getEnvVar(key: string): string | undefined {
   try {

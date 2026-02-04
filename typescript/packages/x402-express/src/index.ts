@@ -11,7 +11,6 @@ import {
   toJsonSafe,
   validateTokenCompatibility,
 } from "@b3dotfun/anyspend-x402/shared";
-import { isUsdcAddress } from "@b3dotfun/anyspend-x402/shared/evm";
 import {
   ERC20TokenAmount,
   evmSignatureTypes,
@@ -334,7 +333,9 @@ export function paymentMiddleware(
       } else {
         // Direct transfer (same token, same network)
         // Still need to call quote to get facilitatorAddress for ERC-2612 permit
-        console.log("✓ Direct transfer (same token and network) - calling quote for facilitator info");
+        console.log(
+          "✓ Direct transfer (same token and network) - calling quote for facilitator info",
+        );
         const quoteResponse = await fetch(`${facilitator?.url}/quote`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },

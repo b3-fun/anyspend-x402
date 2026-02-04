@@ -23,6 +23,21 @@ const CACHE_TTL = 60 * 60 * 1000;
 let tokenCompatClient: TokenCompatClient | null = null;
 
 /**
+ * Get environment variable safely (works in Node.js and edge runtimes)
+ */
+function getEnvVar(key: string): string | undefined {
+  try {
+    // Check if process exists (Node.js environment)
+    if (typeof process !== "undefined" && process.env) {
+      return process.env[key];
+    }
+  } catch {
+    // process is not defined (edge runtime)
+  }
+  return undefined;
+}
+
+/**
  * Get or create the token compatibility client
  *
  * @returns The token compatibility client instance
@@ -30,7 +45,7 @@ let tokenCompatClient: TokenCompatClient | null = null;
 function getTokenCompatClient(): TokenCompatClient {
   if (!tokenCompatClient) {
     tokenCompatClient = new TokenCompatClient({
-      apiBaseUrl: process.env.TOKEN_METADATA_API_URL || "https://tokens.anyspend.com",
+      apiBaseUrl: getEnvVar("TOKEN_METADATA_API_URL") || "https://tokens.anyspend.com",
       timeout: 10000,
     });
   }
